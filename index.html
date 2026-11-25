@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Temperaturer</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f6f6f4;
+    --surface-1: #ffffff;
+    --border: #e4e4e0;
+    --grid: #ececea;
+    --axis: #c9c9c4;
+    --text-primary: #191919;
+    --text-secondary: #666666;
+    --series-1: #257de0;
+    --series-2: #f47230;
+    --series-3: #00b894;
+    --warning: #fbb315;
+    --critical: #dc3c3d;
+    --warning-text: #8a5a00;
+    --critical-text: #b3262a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #111111;
+      --surface-1: #191919;
+      --border: #2c2c2c;
+      --grid: #262626;
+      --axis: #3d3d3d;
+      --text-primary: #efefef;
+      --text-secondary: #9c9c9c;
+      --series-1: #338ced;
+      --series-2: #e76624;
+      --series-3: #00a888;
+      --warning-text: #fbb315;
+      --critical-text: #f07070;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text-primary);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 20px 48px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
+  .updated { color: var(--text-secondary); font-size: 14px; }
+  .updated.stale { color: var(--warning-text); }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .card .name { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text-secondary); }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .card .temp { font-size: 40px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
+  .card .temp small { font-size: 20px; font-weight: 500; color: var(--text-secondary); }
+  .card .meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--text-secondary); }
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+  .badge.warn { color: var(--warning-text); }
+  .badge.crit { color: var(--critical-text); }
+  .badge svg { width: 14px; height: 14px; }
+
+  .panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 18px 18px 12px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .panel-head h2 { font-size: 17px; margin: 0; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 14px; border: 0; background: transparent; color: var(--text-secondary); padding: 5px 12px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--text-secondary); margin: 0 0 6px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .chart-wrap { position: relative; }
+  svg.chart { display: block; width: 100%; height: 300px; overflow: visible; }
+  .tip {
+    position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    white-space: nowrap; display: none; z-index: 2;
+  }
+  .tip .t { color: var(--text-secondary); margin-bottom: 4px; }
+  .tip .row { display: flex; align-items: center; gap: 6px; }
+  .tip .row b { margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums; }
+  .empty { color: var(--text-secondary); padding: 40px 0; text-align: center; }
+  details { margin-top: 10px; font-size: 14px; color: var(--text-secondary); }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--grid); }
+  footer { margin-top: 18px; font-size: 13px; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Temperaturer</h1>
+    <div class="updated" id="updated">Laster …</div>
+  </header>
+
+  <section class="cards" id="cards"></section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Temperatur over tid</h2>
+      <div class="seg" role="group" aria-label="Tidsrom">
+        <button data-h="24" aria-pressed="true">24 timer</button>
+        <button data-h="168" aria-pressed="false">7 dager</button>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="chart-wrap" id="wrap">
+      <svg class="chart" id="chart" role="img" aria-label="Linjediagram over temperatur"></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+    <details>
+      <summary>Vis som tabell</summary>
+      <div id="table"></div>
+    </details>
+  </section>
+
+  <footer>Data fra Smart Life · oppdateres omtrent hvert 15. minutt</footer>
+</main>
+
+<script>
+const SERIES = ["--series-1", "--series-2", "--series-3"];
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt = n => (n == null ? "–" : n.toLocaleString("nb-NO", { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
+const tFmt = new Intl.DateTimeFormat("nb-NO", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+const hFmt = new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" });
+const dFmt = new Intl.DateTimeFormat("nb-NO", { weekday: "short", day: "numeric" });
+
+let latest = null, history = null, hours = 24, colorOf = {};
+
+const ICON_WARN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.5 15 14H1L8 1.5Zm-.75 4.5v4h1.5V6h-1.5Zm0 5v1.5h1.5V11h-1.5Z"/></svg>';
+
+function battery(b) {
+  if (b == null) return "";
+  const low = b === "low" || (typeof b === "number" && b <= 15);
+  const mid = b === "middle" || (typeof b === "number" && b <= 35);
+  const label = typeof b === "number" ? b + " %" : ({ low: "lavt", middle: "middels", high: "fullt" }[b] || b);
+  if (low) return `<span class="badge crit">${ICON_WARN}Batteri ${label}</span>`;
+  if (mid) return `<span class="badge warn">Batteri ${label}</span>`;
+  return `<span>Batteri ${label}</span>`;
+}
+
+function renderCards() {
+  const el = document.getElementById("cards");
+  el.innerHTML = latest.sensors.map(s => `
+    <article class="card">
+      <div class="name"><span class="swatch" style="background:var(${colorOf[s.id]})"></span>${esc(s.name)}</div>
+      <div class="temp">${fmt(s.temp)}<small> °C</small></div>
+      <div class="meta">
+        ${s.hum != null ? `<span>${Math.round(s.hum)} % fukt</span>` : ""}
+        ${battery(s.batt)}
+        ${s.online ? "" : `<span class="badge warn">${ICON_WARN}Frakoblet</span>`}
+      </div>
+    </article>`).join("");
+
+  const upd = new Date(latest.updated);
+  const mins = (Date.now() - upd) / 60000;
+  const u = document.getElementById("updated");
+  u.textContent = "Oppdatert " + tFmt.format(upd) + (mins > 60 ? " – mer enn en time siden" : "");
+  u.classList.toggle("stale", mins > 60);
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function renderChart() {
+  const svg = document.getElementById("chart");
+  const ids = latest.sensors.map(s => s.id);
+  const legend = document.getElementById("legend");
+  legend.innerHTML = ids.length > 1 ? latest.sensors.map(s =>
+    `<span><span class="swatch" style="background:var(${colorOf[s.id]})"></span>${esc(s.name)}</span>`).join("") : "";
+
+  const since = Date.now() - hours * 3600e3;
+  const pts = (history?.points || []).map(p => ({ ...p, ts: +new Date(p.t) })).filter(p => p.ts >= since);
+  if (pts.length < 2) {
+    svg.innerHTML = "";
+    svg.style.height = "0";
+    document.getElementById("wrap").insertAdjacentHTML("beforeend",
+      '<div class="empty" id="empty">Grafen fylles ut etter hvert som målingene kommer inn.</div>');
+    document.getElementById("table").innerHTML = "";
+    return;
+  }
+  document.getElementById("empty")?.remove();
+  svg.style.height = "";
+
+  const W = svg.clientWidth || 900, H = 300;
+  const narrow = W < 560;
+  const m = { l: 40, r: narrow ? 14 : 110, t: 12, b: 28 };
+  const x0 = pts[0].ts, x1 = pts[pts.length - 1].ts;
+  const vals = pts.flatMap(p => ids.map(id => p[id]).filter(v => typeof v === "number"));
+  let lo = Math.floor(Math.min(...vals) - 1), hi = Math.ceil(Math.max(...vals) + 1);
+  const step = (hi - lo) > 20 ? 5 : (hi - lo) > 8 ? 2 : 1;
+  lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const X = t => m.l + (t - x0) / (x1 - x0 || 1) * (W - m.l - m.r);
+  const Y = v => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
+
+  let g = "";
+  for (let v = lo; v <= hi; v += step) {
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${css(v === 0 ? "--axis" : "--grid")}" stroke-width="1"/>`;
+    g += `<text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end" font-size="12" fill="${css("--text-secondary")}">${v}°</text>`;
+  }
+  const tickEvery = hours <= 24 ? (narrow ? 6 : 4) * 3600e3 : (narrow ? 48 : 24) * 3600e3;
+  const first = Math.ceil(x0 / tickEvery) * tickEvery;
+  for (let t = first; t <= x1; t += tickEvery) {
+    const d = new Date(t);
+    const label = hours <= 24 ? hFmt.format(d) : dFmt.format(d);
+    g += `<text x="${X(t)}" y="${H - 6}" text-anchor="middle" font-size="12" fill="${css("--text-secondary")}">${label}</text>`;
+  }
+
+  // linjer + direkte etiketter i enden
+  const ends = [];
+  ids.forEach(id => {
+    let d = "", pen = false;
+    for (const p of pts) {
+      const v = p[id];
+      if (typeof v !== "number") { pen = false; continue; }
+      d += (pen ? "L" : "M") + X(p.ts).toFixed(1) + "," + Y(v).toFixed(1);
+      pen = true;
+    }
+    g += `<path d="${d}" fill="none" stroke="${css(colorOf[id])}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const last = [...pts].reverse().find(p => typeof p[id] === "number");
+    if (last) ends.push({ id, y: Y(last[id]), x: X(last.ts), v: last[id] });
+  });
+  ends.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 16) ends[i].y = ends[i - 1].y + 16;
+  const nameOf = Object.fromEntries(latest.sensors.map(s => [s.id, s.name]));
+  ends.forEach(e => {
+    g += `<circle cx="${e.x}" cy="${e.y}" r="4" fill="${css(colorOf[e.id])}" stroke="${css("--surface-1")}" stroke-width="2"/>`;
+    if (narrow) return;
+    const nm = nameOf[e.id] || history.names[e.id] || "";
+    g += `<text x="${W - m.r + 10}" y="${e.y + 4}" font-size="12" fill="${css("--text-primary")}">${esc(nm.length > 14 ? nm.slice(0, 13) + "…" : nm)}</text>`;
+  });
+
+  g += `<line id="xh" y1="${m.t}" y2="${H - m.b}" stroke="${css("--axis")}" stroke-width="1" visibility="hidden"/>`;
+  g += `<g id="dots"></g>`;
+  g += `<rect x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent" id="hit"/>`;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = g;
+
+  const tip = document.getElementById("tip"), xh = svg.querySelector("#xh"), dots = svg.querySelector("#dots");
+  const hit = svg.querySelector("#hit");
+  const move = ev => {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+    const t = x0 + (px - m.l) / (W - m.l - m.r) * (x1 - x0);
+    let best = pts[0];
+    for (const p of pts) if (Math.abs(p.ts - t) < Math.abs(best.ts - t)) best = p;
+    const bx = X(best.ts);
+    xh.setAttribute("x1", bx); xh.setAttribute("x2", bx); xh.setAttribute("visibility", "visible");
+    dots.innerHTML = ids.filter(id => typeof best[id] === "number").map(id =>
+      `<circle cx="${bx}" cy="${Y(best[id])}" r="4" fill="${css(colorOf[id])}" stroke="${css("--surface-1")}" stroke-width="2"/>`).join("");
+    tip.innerHTML = `<div class="t">${tFmt.format(new Date(best.ts))}</div>` + ids.map(id =>
+      `<div class="row"><span class="swatch" style="background:var(${colorOf[id]})"></span>${esc(nameOf[id] || "")}<b>${fmt(best[id])} °C</b></div>`).join("");
+    tip.style.display = "block";
+    const tw = tip.offsetWidth;
+    let left = bx + 12; if (left + tw > r.width) left = bx - tw - 12;
+    tip.style.left = Math.max(0, left) + "px"; tip.style.top = "8px";
+  };
+  const leave = () => { tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); dots.innerHTML = ""; };
+  hit.addEventListener("mousemove", move); hit.addEventListener("touchmove", move, { passive: true });
+  hit.addEventListener("mouseleave", leave); hit.addEventListener("touchend", leave);
+
+  // tabell
+  const rows = pts.slice(-48).reverse();
+  document.getElementById("table").innerHTML = `<table><thead><tr><th>Tid</th>${ids.map(id => `<th>${esc(nameOf[id])}</th>`).join("")}</tr></thead><tbody>` +
+    rows.map(p => `<tr><td>${tFmt.format(new Date(p.ts))}</td>${ids.map(id => `<td>${fmt(p[id])}</td>`).join("")}</tr>`).join("") + "</tbody></table>";
+}
+
+async function load() {
+  try {
+    const bust = "?t=" + Date.now();
+    const [a, b] = await Promise.all([
+      fetch("data/latest.json" + bust).then(r => { if (!r.ok) throw 0; return r.json(); }),
+      fetch("data/history.json" + bust).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    latest = a; history = b;
+    // farge følger måleren, ikke rekkefølgen – fast etter navn
+    const known = Object.keys(history?.names || {}).length ? Object.keys(history.names) : latest.sensors.map(s => s.id);
+    const all = [...new Set([...known, ...latest.sensors.map(s => s.id)])]
+      .sort((x, y) => ((history?.names?.[x] || "") + x).localeCompare((history?.names?.[y] || "") + y));
+    all.forEach((id, i) => { colorOf[id] = SERIES[i % SERIES.length]; });
+    renderCards(); renderChart();
+  } catch (e) {
+    document.getElementById("updated").textContent = "Ingen data ennå – venter på første henting.";
+  }
+}
+
+document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+  hours = +b.dataset.h;
+  document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  if (latest) renderChart();
+}));
+window.addEventListener("resize", () => latest && renderChart());
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => latest && (renderCards(), renderChart()));
+load();
+setInterval(load, 5 * 60e3);
+</script>
+</body>
+</html>
