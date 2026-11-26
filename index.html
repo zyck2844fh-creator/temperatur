@@ -217,6 +217,16 @@ function renderChart() {
       pen = true;
     }
     g += `<path d="${d}" fill="none" stroke="${css(colorOf[id])}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    // liten prikk på hver avlesning – bare i 24-timersvisningen
+    const spacing = (W - m.l - m.r) / Math.max(1, pts.length - 1);
+    if (hours <= 24 && spacing >= 5) {
+      const r = spacing >= 10 ? 2.5 : 2;
+      for (const p of pts) {
+        const v = p[id];
+        if (typeof v !== "number") continue;
+        g += `<circle cx="${X(p.ts).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="${r}" fill="${css(colorOf[id])}" stroke="${css("--surface-1")}" stroke-width="1"/>`;
+      }
+    }
     const last = [...pts].reverse().find(p => typeof p[id] === "number");
     if (last) ends.push({ id, y: Y(last[id]), x: X(last.ts), v: last[id] });
   });
